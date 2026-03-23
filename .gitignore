@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# generated experiment outputs
+boxplot_*.png
+all_cases_sorted_*.csv
+anova_*.csv
+factor_impact_*.csv
+top_anomalous_cases*.csv
+results_testcases*.csv
+
+# generated synthetic queries
+queries_generated.txt
