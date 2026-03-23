@@ -112,6 +112,12 @@ SC4079-FINAL-YEAR-PROJECT/
 pip install flask pandas numpy matplotlib statsmodels
 ```
 
+### Optional. Prepare synthetic data (otherwise there is no data in web application)
+```bash
+python query_generator.py
+python generate_events.py
+```
+
 ### 2. Run the web application
 ```bash
 python app.py
