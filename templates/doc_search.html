@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prefix Document Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1400px;
+            margin: 24px auto;
+            padding: 0 18px;
+            background: #f5f7fb;
+            color: #222;
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
+        .card {
+            background: white;
+            padding: 18px;
+            margin-bottom: 18px;
+            border-radius: 12px;
+            box-shadow: 0 1px 8px rgba(0,0,0,0.08);
+        }
+
+        input[type="text"], textarea, select {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 6px;
+            margin-bottom: 12px;
+            box-sizing: border-box;
+            border: 1px solid #d8deea;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 180px;
+            resize: vertical;
+        }
+
+        button {
+            padding: 10px 16px;
+            cursor: pointer;
+            border: 0;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        .error {
+            color: #b00020;
+        }
+
+        .success {
+            color: #0a7a2f;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .search-layout {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 18px;
+            align-items: start;
+        }
+
+        .search-controls {
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 12px;
+        }
+
+        .words {
+            margin: 10px 0 0;
+        }
+
+        .word-chip {
+            display: inline-block;
+            background: #e8eefc;
+            padding: 6px 10px;
+            margin: 4px 6px 4px 0;
+            border-radius: 16px;
+            font-size: 13px;
+        }
+
+        .result-list {
+            max-height: 650px;
+            overflow: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .result-item {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 12px;
+            cursor: pointer;
+        }
+
+        .result-item:hover {
+            background: #eef4ff;
+        }
+
+        .result-item.active {
+            background: #dbeafe;
+        }
+
+        .meta {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .snippet {
+            background: white;
+            padding: 8px 10px;
+            border-radius: 8px;
+            line-height: 1.5;
+            font-size: 14px;
+            border: 1px solid #edf0f5;
+        }
+
+        .viewer-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .viewer {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            background: white;
+            min-height: 650px;
+            max-height: 650px;
+            overflow: auto;
+            padding: 14px;
+        }
+
+        .doc-pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            font-family: inherit;
+            line-height: 1.65;
+            font-size: 15px;
+        }
+
+        mark {
+            background: #fde68a;
+            padding: 1px 2px;
+            border-radius: 3px;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        mark.active-hit {
+            background: #fb923c;
+            box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.35);
+        }
+
+        .summary-box {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .muted {
+            color: #6b7280;
+        }
+
+        @media (max-width: 1000px) {
+            .search-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .search-controls,
+            .row {
+                grid-template-columns: 1fr;
+            }
+
+            .result-list,
+            .viewer {
+                max-height: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Prefix Search over Uploaded Documents</h1>
+
+    <div class="row">
+        <div class="card">
+            <h2>Upload by Pasting Text</h2>
+            <label>Document Name</label>
+            <input type="text" id="docIdText" placeholder="e.g. article1">
+
+            <label>Document Text</label>
+            <textarea id="docText" placeholder="Paste your long article here..."></textarea>
+
+            <button onclick="uploadText()">Upload Text</button>
+            <div id="uploadTextStatus" class="status"></div>
+        </div>
+
+        <div class="card">
+            <h2>Upload a .txt File</h2>
+            <label>Document Name</label>
+            <input type="text" id="docIdFile" placeholder="e.g. file1">
+
+            <input type="file" id="fileInput" accept=".txt">
+            <br><br>
+            <button onclick="uploadFile()">Upload File</button>
+            <div id="uploadFileStatus" class="status"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Search Prefix</h2>
+
+        <div class="search-controls">
+            <div>
+                <label>Prefix</label>
+                <input type="text" id="prefixInput" placeholder="Type a prefix, e.g. pre" oninput="searchPrefixLive()">
+            </div>
+            <div>
+                <label>Document Scope</label>
+                <select id="docSelect" onchange="searchPrefixLive()">
+                    <option value="all">All documents</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="searchSummary" class="summary-box"></div>
+        <div id="matchedWords" class="words"></div>
+
+        <div class="search-layout">
+            <div>
+                <h3>Matches</h3>
+                <div id="results" class="result-list"></div>
+            </div>
+
+            <div>
+                <div class="viewer-header">
+                    <h3 style="margin:0;">Document Viewer</h3>
+                    <div id="viewerDocLabel" class="muted">No document selected</div>
+                </div>
+                <div id="documentViewer" class="viewer">
+                    <div class="muted">Search for a prefix to see the full document with highlighted matches.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let searchTimer = null;
+        let currentActiveIndex = null;
+
+        async function loadDocuments() {
+            const select = document.getElementById("docSelect");
+
+            try {
+                const res = await fetch("/api/doc/list");
+                const data = await res.json();
+
+                if (!data.ok) return;
+
+                const currentValue = select.value || "all";
+                select.innerHTML = '<option value="all">All documents</option>';
+
+                data.documents.forEach(docId => {
+                    const option = document.createElement("option");
+                    option.value = docId;
+                    option.textContent = docId;
+                    select.appendChild(option);
+                });
+
+                const exists = Array.from(select.options).some(opt => opt.value === currentValue);
+                select.value = exists ? currentValue : "all";
+            } catch (err) {
+                console.error("Failed to load document list:", err);
+            }
+        }
+
+        async function uploadText() {
+            const docId = document.getElementById("docIdText").value.trim();
+            const text = document.getElementById("docText").value.trim();
+            const status = document.getElementById("uploadTextStatus");
+
+            status.className = "status";
+            status.textContent = "";
+
+            const formData = new FormData();
+            formData.append("doc_id", docId);
+            formData.append("text", text);
+
+            const res = await fetch("/api/doc/upload_text", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                status.classList.add("success");
+                status.textContent = data.message;
+                await loadDocuments();
+                searchPrefixLive();
+            } else {
+                status.classList.add("error");
+                status.textContent = data.error;
+            }
+        }
+
+        async function uploadFile() {
+            const docId = document.getElementById("docIdFile").value.trim();
+            const fileInput = document.getElementById("fileInput");
+            const status = document.getElementById("uploadFileStatus");
+
+            status.className = "status";
+            status.textContent = "";
+
+            const formData = new FormData();
+            formData.append("doc_id", docId);
+
+            if (fileInput.files.length > 0) {
+                formData.append("file", fileInput.files[0]);
+            }
+
+            const res = await fetch("/api/doc/upload_file", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                status.classList.add("success");
+                status.textContent = data.message;
+                await loadDocuments();
+                searchPrefixLive();
+            } else {
+                status.classList.add("error");
+                status.textContent = data.error;
+            }
+        }
+
+        function searchPrefixLive() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                searchPrefix();
+            }, 180);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement("div");
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function setActiveResult(resultIndex) {
+            document.querySelectorAll(".result-item").forEach(el => el.classList.remove("active"));
+            const item = document.getElementById(`result-${resultIndex}`);
+            if (item) item.classList.add("active");
+            currentActiveIndex = resultIndex;
+        }
+
+        function setActiveHit(hitIndex) {
+            document.querySelectorAll("#documentViewer mark").forEach(el => {
+                el.classList.remove("active-hit");
+            });
+
+            if (hitIndex === null || hitIndex === undefined) return;
+
+            const hit = document.getElementById(`hit-${hitIndex}`);
+            if (hit) {
+                hit.classList.add("active-hit");
+            }
+        }
+
+        function scrollToHit(hitIndex, resultIndex) {
+            const hit = document.getElementById(`hit-${hitIndex}`);
+            if (!hit) return;
+
+            setActiveResult(resultIndex);
+            setActiveHit(hitIndex);
+
+            hit.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }
+
+        async function openResultInViewer(row, resultIndex) {
+            const prefix = document.getElementById("prefixInput").value.trim();
+            const viewer = document.getElementById("documentViewer");
+            const viewerDocLabel = document.getElementById("viewerDocLabel");
+
+            if (!row || !row.doc_id) return;
+
+            const res = await fetch(
+                `/api/doc/view?doc_id=${encodeURIComponent(row.doc_id)}&prefix=${encodeURIComponent(prefix)}`
+            );
+            const data = await res.json();
+
+            if (!data.ok) return;
+
+            viewer.innerHTML = data.document_html || `<div class="muted">No viewer content.</div>`;
+            viewerDocLabel.textContent = `Showing: ${data.doc_id}`;
+
+            // map this clicked result to the correct hit index inside the loaded doc
+            const hitIndex = data.results.findIndex(r =>
+                r.doc_id === row.doc_id &&
+                r.word === row.word &&
+                r.char_start === row.char_start &&
+                r.char_end === row.char_end
+            );
+
+            if (hitIndex !== -1) {
+                setTimeout(() => {
+                    scrollToHit(hitIndex, resultIndex);
+                }, 30);
+            } else {
+                setActiveResult(resultIndex);
+                setActiveHit(null);
+            }
+        }
+
+        function jumpToHit(hitIndex, resultIndex) {
+            const viewer = document.getElementById("documentViewer");
+            if (!viewer) return;
+
+            setActiveResult(resultIndex);
+            setActiveHit(hitIndex);
+
+            if (hitIndex === null || hitIndex === undefined) return;
+
+            const hit = document.getElementById(`hit-${hitIndex}`);
+            if (!hit) return;
+
+            hit.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }
+
+        async function searchPrefix() {
+            const prefix = document.getElementById("prefixInput").value.trim();
+            const docId = document.getElementById("docSelect").value;
+            const matchedWordsDiv = document.getElementById("matchedWords");
+            const resultsDiv = document.getElementById("results");
+            const summaryDiv = document.getElementById("searchSummary");
+            const viewer = document.getElementById("documentViewer");
+            const viewerDocLabel = document.getElementById("viewerDocLabel");
+
+            matchedWordsDiv.innerHTML = "";
+            resultsDiv.innerHTML = "";
+            summaryDiv.innerHTML = "";
+            viewer.innerHTML = `<div class="muted">Search for a prefix to see the full document with highlighted matches.</div>`;
+            viewerDocLabel.textContent = "No document selected";
+            currentActiveIndex = null;
+
+            if (!prefix) return;
+
+            const res = await fetch(
+                `/api/doc/search_prefix?prefix=${encodeURIComponent(prefix)}&doc_id=${encodeURIComponent(docId)}`
+            );
+            const data = await res.json();
+
+            if (!data.ok) {
+                summaryDiv.innerHTML = `<span class="error">Search failed</span>`;
+                return;
+            }
+
+            summaryDiv.innerHTML = `
+                <strong>Prefix:</strong> ${escapeHtml(data.prefix)}<br>
+                <strong>Scope:</strong> ${escapeHtml(data.selected_doc || docId)}<br>
+                <strong>Matched words:</strong> ${data.matched_words.length}<br>
+                <strong>Occurrences found:</strong> ${data.results.length}<br>
+                <strong>Search time:</strong> ${data.ms ? data.ms.toFixed(3) : "0.000"} ms
+            `;
+
+            if (data.matched_words.length > 0) {
+                matchedWordsDiv.innerHTML = data.matched_words
+                    .map(word => `<span class="word-chip">${escapeHtml(word)}</span>`)
+                    .join("");
+            }
+
+            if (data.document_doc_id) {
+                viewerDocLabel.textContent = `Showing: ${data.document_doc_id}`;
+                viewer.innerHTML = data.document_html || `<div class="muted">No viewer content.</div>`;
+            } else {
+                viewer.innerHTML = `<div class="muted">No matching document to display.</div>`;
+            }
+
+            if (data.results.length === 0) {
+                resultsDiv.innerHTML = `<div class="result-item"><div class="muted">No results found.</div></div>`;
+                return;
+            }
+
+            let hitCounter = 0;
+            const displayedDocId = data.document_doc_id;
+
+            const enrichedResults = data.results.map((row) => {
+                let hitIndex = null;
+
+                if (row.doc_id === displayedDocId) {
+                    hitIndex = hitCounter;
+                    hitCounter += 1;
+                }
+
+                return { ...row, hitIndex };
+            });
+
+            window.currentResults = enrichedResults;
+
+            resultsDiv.innerHTML = enrichedResults.map((row, index) => `
+                <div class="result-item" id="result-${index}" onclick="openResultInViewer(window.currentResults[${index}], ${index})">
+                    <div class="meta">
+                        <strong>Document:</strong> ${escapeHtml(row.doc_id)}
+                        &nbsp;|&nbsp;
+                        <strong>Word:</strong> ${escapeHtml(row.word)}
+                        &nbsp;|&nbsp;
+                        <strong>Char position:</strong> ${row.char_start}
+                    </div>
+                    <div class="snippet">${row.snippet}</div>
+                </div>
+            `).join("");
+
+            // auto-select first result if it belongs to displayed document
+            const firstVisibleResultIndex = enrichedResults.findIndex(r => r.hitIndex === 0);
+            if (firstVisibleResultIndex !== -1) {
+                setActiveResult(firstVisibleResultIndex);
+                setActiveHit(0);
+            }
+        }
+
+        window.onload = async function () {
+            await loadDocuments();
+        };
+    </script>
+</body>
+</html>

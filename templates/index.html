@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Autocomplete Demo (Trie / Patricia)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; background: #fff; }
+    .wrap { max-width: 720px; margin: 9vh auto 0; padding: 0 16px; }
+    .logo { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 18px; }
+    .bar { position: relative; }
+    input[type="text"] {
+      width: 100%; font-size: 18px; padding: 14px 14px;
+      border: 1px solid #dfe1e5; border-radius: 24px; outline: none;
+      box-shadow: 0 1px 6px rgba(32,33,36,0.08);
+    }
+    input[type="text"]:focus { border-color: #c9d3ff; }
+    .panel {
+      margin-top: 10px; border: 1px solid #dfe1e5; border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(32,33,36,0.10);
+      overflow: hidden; display: none;
+    }
+    .row {
+      padding: 10px 14px; cursor: pointer; background: #fff;
+      display: flex; justify-content: space-between; gap: 12px;
+    }
+    .row:hover { background: #f6f8fc; }
+    .row.active { background: #e8f0fe; }
+    .meta { color: #5f6368; font-size: 12px; white-space: nowrap; padding-left: 10px; }
+    .controls {
+      margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      color: #444;
+    }
+    select, .pill {
+      padding: 8px 10px; border-radius: 10px; border: 1px solid #dfe1e5; background: #fff;
+      font-size: 14px;
+    }
+    .pill { display: inline-flex; align-items: center; gap: 8px; }
+    .hint { color: #6a6a6a; font-size: 13px; margin-top: 12px; line-height: 1.35; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f1f3f4; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="logo">autocomplete</div>
+
+    <div class="bar">
+      <input id="q" type="text" autocomplete="off" placeholder="Type to search..." />
+      <div id="panel" class="panel"></div>
+    </div>
+
+    <div class="controls">
+      <span class="pill">
+        DS:
+        <select id="ds">
+          <option value="trie">trie</option>
+          {% if has_patricia %}
+            <option value="patricia">patricia</option>
+          {% endif %}
+        </select>
+      </span>
+
+      <span class="pill">
+        Mode:
+        <select id="mode">
+          <option value="cached">cached</option>
+          <option value="ranked">ranked</option>
+          <option value="baseline">baseline</option>
+        </select>
+      </span>
+
+      <span class="pill">
+        K:
+        <select id="k">
+          <option>5</option>
+          <option selected>10</option>
+          <option>20</option>
+          <option>50</option>
+        </select>
+      </span>
+
+      <span class="pill">
+        Latency: <span id="lat">—</span>
+      </span>
+    </div>
+
+    <div class="hint">
+      Controls: <span class="kbd">↑</span>/<span class="kbd">↓</span> to move,
+      <span class="kbd">Enter</span> to select, <span class="kbd">Esc</span> to close.
+    </div>
+  </div>
+
+<script>
+  const input = document.getElementById("q");
+  const panel = document.getElementById("panel");
+  const dsSel = document.getElementById("ds");
+  const modeSel = document.getElementById("mode");
+  const kSel = document.getElementById("k");
+  const latEl = document.getElementById("lat");
+
+  let debounceTimer = null;
+  let activeIndex = -1;
+  let lastItems = [];
+
+  function escapeHtml(s){
+    return s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  }
+
+  function highlightPrefix(word, prefix){
+    const w = escapeHtml(word);
+    const p = escapeHtml(prefix);
+    if (!prefix) return w;
+    if (word.startsWith(prefix)) {
+      return "<b>" + w.slice(0, prefix.length) + "</b>" + w.slice(prefix.length);
+    }
+    return w;
+  }
+
+  function showPanel(show){
+    panel.style.display = show ? "block" : "none";
+    if (!show) activeIndex = -1;
+  }
+
+  function render(items){
+    lastItems = items || [];
+    panel.innerHTML = "";
+
+    if (!lastItems.length) {
+      showPanel(false);
+      return;
+    }
+
+    const prefix = input.value.trim();
+    lastItems.forEach((w, idx) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<div>${highlightPrefix(w, prefix)}</div><div class="meta"></div>`;
+      row.addEventListener("mouseenter", () => setActive(idx));
+      row.addEventListener("mousedown", (e) => {
+        // mousedown so it selects before input blur
+        e.preventDefault();
+        commit(idx);
+      });
+      panel.appendChild(row);
+    });
+
+    showPanel(true);
+    setActive(0);
+  }
+
+  function setActive(idx){
+    activeIndex = idx;
+    [...panel.children].forEach((el, i) => {
+      el.classList.toggle("active", i === activeIndex);
+    });
+  }
+    async function recordQuery(q){
+    q = (q || "").trim();
+    if (!q) return;
+    try{
+        await fetch("/add", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ q })
+        });
+    }catch(e){
+        // ignore
+    }
+    }
+
+  function commit(idx){
+    if (idx < 0 || idx >= lastItems.length) return;
+    input.value = lastItems[idx];
+    showPanel(false);
+    recordQuery(input.value);
+    }
+
+
+  async function runSuggest(){
+    const q = input.value;
+    const url = `/suggest?q=${encodeURIComponent(q)}&ds=${encodeURIComponent(dsSel.value)}&mode=${encodeURIComponent(modeSel.value)}&k=${encodeURIComponent(kSel.value)}`;
+    try{
+      const res = await fetch(url);
+      const data = await res.json();
+      latEl.textContent = (data.ms ?? 0).toFixed(2) + " ms";
+      render(data.items || []);
+    }catch(e){
+      latEl.textContent = "error";
+      showPanel(false);
+    }
+  }
+
+  function scheduleSuggest(){
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(runSuggest, 120);
+  }
+
+  input.addEventListener("input", scheduleSuggest);
+  dsSel.addEventListener("change", runSuggest);
+  modeSel.addEventListener("change", runSuggest);
+  kSel.addEventListener("change", runSuggest);
+
+  input.addEventListener("keydown", (e) => {
+  // Always treat Enter as a commit
+  if (e.key === "Enter") {
+    recordQuery(input.value);
+    showPanel(false);
+    return;
+  }
+
+  // Only handle arrows/esc when panel is open
+  if (panel.style.display !== "block") return;
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (!lastItems.length) return;
+    setActive(Math.min(activeIndex + 1, lastItems.length - 1));
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!lastItems.length) return;
+    setActive(Math.max(activeIndex - 1, 0));
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    showPanel(false);
+  }
+});
+
+
+  document.addEventListener("click", (e) => {
+    if (!panel.contains(e.target) && e.target !== input) showPanel(false);
+  });
+</script>
+</body>
+</html>
