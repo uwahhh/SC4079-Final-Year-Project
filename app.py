@@ -24,7 +24,7 @@ except Exception:
 
 
 app = Flask(__name__)
-QUERY_LOG = Path(os.environ.get("query_log.csv"))
+QUERY_LOG = Path(os.environ.get("QUERY_LOG", "query_log.csv"))
 LOG_LOCK = Lock()
 
 
